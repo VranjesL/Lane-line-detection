@@ -51,8 +51,7 @@ You're reading it!
         - Passing object points and image points alongside the image size to cv2.calibrateCamera()
         - This function calculates camera matrix, distortion coefficients and rotation/translation vectors
 
-![Chessboard_image](camera_cal/calibration1.jpg "Before")
-![Calibrated_chessboard_image](callibration_chessboard.jpg "After")
+![Chessboard_image](camera_cal/calibration1.jpg "Before")|![Calibrated_chessboard_image](callibration_chessboard.jpg "After")
 
 #### 2. Describe how (and identify where in your code) you used color transforms, gradients or other methods to create a thresholded binary image.  Provide an example of a binary image result.
 
@@ -71,8 +70,7 @@ You're reading it!
     * RoI Masking : main.py, lines 48 - 59
         - Applying polygonal mask to limit the region of interest (the road area in the image)
     
-![Binary Threshold](test_images/test2.jpg "Before")
-![Binary Threshold Applied](binary_threshold_applied.jpg "After")
+![Binary Threshold](test_images/test2.jpg "Before")|![Binary Threshold Applied](binary_threshold_applied.jpg "After")
 
 #### 3. Describe how (and identify where in your code) you performed a perspective transform and provide an example of a transformed image.
 
