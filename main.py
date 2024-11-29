@@ -4,8 +4,8 @@ import glob
 import matplotlib.pyplot as plt
 
 def calibrate(images, nx = 9, ny = 6):
-    objpoints = []
-    imgpoints = []
+    objpoints = [] # representation of 3D grid for real world representation of chessboard corners
+    imgpoints = [] # 2D
 
     objp = np.zeros(shape=(nx*ny, 3), dtype=np.float32)
     objp[:, :2] = np.mgrid[0:nx, 0:ny].T.reshape(-1, 2)
@@ -13,8 +13,8 @@ def calibrate(images, nx = 9, ny = 6):
     for path_name in images:
         img = cv2.imread(path_name)
         if img.shape[0] != 720:
-            img = cv2.resize(img,(1280, 720))
-        gray_image = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            img = cv2.resize(img,(1280, 720)) # resizing pictures so we can be consistent
+        gray_image = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY) # transforming it to grayscale to simplify and be more accurate because then we only have one channel
         ret, corners = cv2.findChessboardCorners(gray_image,(nx,ny))
         
         if ret:
@@ -25,6 +25,7 @@ def calibrate(images, nx = 9, ny = 6):
 
 def binary_threshold(img, sobel_kernel=7, mag_thresh=(9, 255), s_thresh=(170, 255)):
     
+    # color transforms
     hls = cv2.cvtColor(img, cv2.COLOR_RGB2HLS)
     gray = hls[:, :, 1]
     s_channel = hls[:, :, 2]
@@ -33,18 +34,19 @@ def binary_threshold(img, sobel_kernel=7, mag_thresh=(9, 255), s_thresh=(170, 25
     s_binary = sobel_binary
     combined_binary = s_binary.astype(np.float32)
 
-    sobelx = cv2.Sobel(gray, cv2.CV_64F, 1, 0, ksize=sobel_kernel)
-
     # we're not using sobely because in lane detection, lane lines will appear vertically
+    sobelx = cv2.Sobel(gray, cv2.CV_64F, 1, 0, ksize=sobel_kernel)
     sobel_abs = np.abs(sobelx**2)
     sobel_abs = np.uint8(255 * sobel_abs / np.max(sobel_abs))
 
     sobel_binary[(sobel_abs > mag_thresh[0]) & (sobel_abs <= mag_thresh[1])] = 1
     s_binary[(s_channel >= s_thresh[0]) & (s_channel <= s_thresh[1])] = 1
 
+    # combining thresholds to capture lines in various conditions
     combined_binary[(s_binary == 1) | (sobel_binary == 1)] = 1
     combined_binary = np.uint8(255 * combined_binary / np.max(combined_binary))
 
+    # limitting region of interest with polygonal mask
     offset = 75
     mask_polyg = np.array([[(0 + offset, img.shape[0]),
                             (img.shape[1] / 2.5, img.shape[0] / 1.6),
@@ -91,7 +93,7 @@ def sliding_window(binary_warped, histogram, nwindows=9):
     right_lane_inds = []
 
     for window in range(nwindows):
-        # Define window boundaries
+        # defining window boundaries
         win_y_low = binary_warped.shape[0] - (window + 1) * window_height
         win_y_high = binary_warped.shape[0] - window * window_height
         win_xleft_low = left_current - margin
@@ -99,17 +101,17 @@ def sliding_window(binary_warped, histogram, nwindows=9):
         win_xright_low = right_current - margin
         win_xright_high = right_current + margin
 
-        # Identify the nonzero pixels within the window
+        # identifying nonzero pixels within the window
         good_left_inds = ((nonzeroy >= win_y_low) & (nonzeroy < win_y_high) &
                         (nonzerox >= win_xleft_low) & (nonzerox < win_xleft_high)).nonzero()[0]
         good_right_inds = ((nonzeroy >= win_y_low) & (nonzeroy < win_y_high) &
                         (nonzerox >= win_xright_low) & (nonzerox < win_xright_high)).nonzero()[0]
 
-        # Append these indices to the lists
+        # appending these indices to the lists
         left_lane_inds.append(good_left_inds)
         right_lane_inds.append(good_right_inds)
 
-        # Recenter windows if enough pixels are found
+        # recentering windows if enough pixels are found
         if len(good_left_inds) > minpix:
             left_current = np.int32(np.mean(nonzerox[good_left_inds]))
         if len(good_right_inds) > minpix:
@@ -154,27 +156,24 @@ def draw_lane(original_img, binary_warped, left_fit, right_fit, Minv):
     return result
 
 def calculate_radius_and_vehicle_position(image, shape, left_fitx, right_fitx, left_fit, right_fit):
-
-    ''' RADIUS '''
-
-    # Define conversions in x and y from pixels to meters
+    # converting pixel values to real-world space 
     ym_per_pix = 30 / 720  # meters per pixel in y dimension
     xm_per_pix = 3.7 / 700  # meters per pixel in x dimension
     img_height = shape[0]
     y_eval = img_height
-    # Generate y-values (image height for real-world space)
+    # generate y-values (image height for real-world space)
     
     ploty = np.linspace(0, img_height - 1, img_height)
-    # Fit new polynomials to x, y in world space
+    # fitting new polynomials to x, y in world space
     left_fit_cr = np.polyfit(ploty * ym_per_pix, left_fitx * xm_per_pix, 2)
     right_fit_cr = np.polyfit(ploty * ym_per_pix, right_fitx * xm_per_pix, 2)
 
-    # Calculate radius of curvature
+    # calculating radius of curvature
     left_curvature = ((1 + (2 * left_fit_cr[0] * y_eval * ym_per_pix + left_fit_cr[1])**2)**1.5) / np.abs(2 * left_fit_cr[0])
     right_curvature = ((1 + (2 * right_fit_cr[0] * y_eval * ym_per_pix + right_fit_cr[1])**2)**1.5) / np.abs(2 * right_fit_cr[0])
-
     radius = round((float(left_curvature) + float(right_curvature))/2.,2)
 
+    # calculating vehicle position with respect to the center
     center = (right_fit[2] - left_fit[2]) / 2
     off_center = round((center - shape[0] / 2.) * xm_per_pix,2)
 
@@ -186,7 +185,7 @@ def calculate_radius_and_vehicle_position(image, shape, left_fitx, right_fitx, l
         cv2.putText(image, line, (0,i), cv2.FONT_HERSHEY_DUPLEX, 0.5,(255,255,255),1,cv2.LINE_AA)
 
 def main():
-    ''' Calibration '''
+
     images = glob.glob('camera_cal/*.jpg')
 
     ret, camera_matrix, dist_coeffs, rvecs, tvecs = calibrate(images)
@@ -197,17 +196,14 @@ def main():
     #solid_yellow_curve_image = cv2.imread('test_images/solid_yellow_curve.jpg')
     #challenge_image = cv2.imread('test_images/challange00101.jpg')
     
-    ''' Binary threshold '''
     undistorted_chessboard_image = cv2.undistort(chessboard_image, camera_matrix, dist_coeffs, None, camera_matrix)
-    cv2.imwrite('callibration_chessboard.jpg', undistorted_chessboard_image)
-
     undistorted_image = cv2.undistort(test_image, camera_matrix, dist_coeffs, None, camera_matrix)
+    cv2.imwrite('callibration_chessboard.jpg', undistorted_chessboard_image)
     cv2.imwrite('undistorted_image.jpg', undistorted_image)
 
     img_m = binary_threshold(undistorted_image)
     cv2.imwrite('binary_threshold_applied.jpg', img_m)
 
-    ''' Changing Perspective to Birds-Eye '''
     img_height, img_width = img_m.shape[:2]
 
     src = np.float32([
@@ -229,12 +225,10 @@ def main():
 
     histogram = np.sum(img_w[img_w.shape[0]//2:, :], axis=0)
     
-    ''' Pixel detection '''
     minv = cv2.getPerspectiveTransform(dst, src)
     left_fit, right_fit = sliding_window(img_w, histogram)
     
     lane_overlay = draw_lane(test_image, img_w, left_fit, right_fit, minv)
-
     plt.imshow(lane_overlay)
     plt.show()
 
